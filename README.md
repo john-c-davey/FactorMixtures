@@ -7,7 +7,7 @@ The following simple example shows how FactorMixtures can be used to fit an MFA 
 
 ```julia
 using DelimitedFiles
-test_dataset,names = readdlm("mtfa_test_dataset.csv", ',', Float64, '\n', header = true)
+test_dataset,names = readdlm(download("https://raw.githubusercontent.com/john-c-davey/Misc/main/mtfa_test_dataset.csv"), ',', Float64, '\n', header = true)
 _test_mfa = MFA_ECM(test_dataset, "MFA", 1, 2, 1, 1,0.5e-2, 200, 1, 1) 
 _test_mghfa = MFA_ECM(test_dataset, "MGHFA", 1, 2, 1, 1,0.5e-2, 200, 1, 1, [1.0,1.0]) 
 ```

@@ -1,22 +1,20 @@
 #Mixture of t Factor Analyzers
-function mtfa_msteps(tau, estep_estimates, Mquantities,lower_nu = 0.1,upper_nu = 200)
-  #browser()
+function mtfa_msteps(tau, estep_estimates, Mquantities,lower_nu = 0.1,upper_nu = 1000)
   #tau_ij  <- estep_estimates[,1]
     #xi_ij = estep_estimates[:,1]
     #zeta_ij = estep_estimates[:,2]
     #MAKE THIS USE GLOBAL VARIABLES 
+   
+
+    #Mquantities.mq.fnu = function f_nu_i(nu_i)
+    #  return log.(0.5*nu_i) .+ 1 .- digamma.(0.5*nu_i) .+ sum(tau .* (estep_estimates[:,2] .- estep_estimates[:,1]))/sum(tau) 
+    #end
+    #return [find_zero(Mquantities.mq.fnu, (0.01,200), Bisection())]
+
+
     Mquantities.mq.fnu = function f_nu_i(nu_i)
-      #log(nu_i/2) + 1 - digamma(nu_i/2) + sum(tau_ij*(zeta_ij - xi_ij))/sum(tau_ij)
       return - (sum(tau)*(0.5*nu_i*log(0.5*nu_i) - log(gamma(0.5*nu_i))) + 0.5*nu_i*sum(tau .* (estep_estimates[:,2] .- estep_estimates[:,1])))
     end
-
-    #function f_nu_i(nu_i)
-      #log(nu_i/2) + 1 - digamma(nu_i/2) + sum(tau_ij*(zeta_ij - xi_ij))/sum(tau_ij)
-    #  return log.(0.5*nu_i) .+ 1 .- digamma.(0.5*nu_i) .+ sum(tau .* (zeta_ij .- xi_ij))/sum(tau) 
-    #end
-
-    #return [find_zero(f_nu_i, (lower_nu, upper_nu), Bisection())]
-
     Mquantities.mq.optim_min = optimize(Mquantities.mq.fnu, lower_nu, upper_nu)
 
     if !Optim.converged(Mquantities.mq.optim_min)
@@ -25,6 +23,7 @@ function mtfa_msteps(tau, estep_estimates, Mquantities,lower_nu = 0.1,upper_nu =
     end
 
     return [Optim.minimizer(Mquantities.mq.optim_min)]
+    
 end  
 
 #Mixture of Slash Factor Analyzers 

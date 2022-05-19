@@ -15,6 +15,9 @@ mutable struct MMVMNFAModel
     status::String
     niter::Int64
     logL_history::Vector{Float64}
+    update_history::Vector{String}
+    clustering::Union{Vector{Int64}, Matrix{Int64}}
+    time::Float64
 end
 
 mutable struct BUpdateQuantities
@@ -87,7 +90,7 @@ mutable struct MLFAQuantities
 end
 
 mutable struct MMVMNFAMutableQuantities
-    BIC_best::Float64
+    LL_best::Float64
     best_model::Union{Nothing, MMVMNFAModel}
     g::Int64
     q::Int64
@@ -145,6 +148,9 @@ mutable struct MMVMNFAMutableQuantities
     mq::Union{Nothing,MtFAQuantities,MSLFAQuantities,MCNFAQuantities,MGHFAQuantities,MBSFAQuantities,MLFAQuantities}
     tau_xi_ij::Matrix{Float64}
     qup::Union{Nothing,BUpdateQuantities}
+    ecm_failed::Bool
+    na_log_esteps::Vector{Int64}
+    estep_rolled_points::Vector{Int64}
 end
 
 struct MMVMNFAStaticQuantities
@@ -173,5 +179,7 @@ struct MMVMNFAStaticQuantities
     n_esteps::Union{Int64, Nothing}
     logL_calc!::Any
     Mstep_calc!::Any
+    extra_params::Int64
+    ledermann::Int64
 end
 

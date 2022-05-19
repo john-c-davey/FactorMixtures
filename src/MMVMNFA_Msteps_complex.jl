@@ -19,13 +19,18 @@ function MStep_mfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities, S
         @views Mquantities.Vi = (Array(Mquantities.Ymu') * (Mquantities.Ymu .* model.tau[:,i]))/Mquantities.n_i[i]
         @views Mquantities.D_is = Diagonal(1 ./ sqrt.(model.D[:,:,i]))
         Mquantities.Vtilde[:,:,i] = Mquantities.D_is*Mquantities.Vi*Mquantities.D_is
-        @views Mquantities.V_eig_temp = eigvals(Array(Mquantities.Vtilde[:,:,i]))
+        #@views Mquantities.V_eig_temp = eigvals(Array(Mquantities.Vtilde[:,:,i]))
         #if any(imag.(V_eig_temp) .!= 0)   
         #    print("uh oh")
         #    print(imag.(V_eig_temp))
         #    print("converting to real number >:(")
         #end 
-        
+        @views Mquantities.V_eig_temp = try
+            eigvals(Array(Mquantities.Vtilde[:,:,i]))
+        catch e
+            model.status = "failed-MInfNan"
+            return 
+        end
 
         if any(imag(Mquantities.V_eig_temp) .> 0)
             println("Complex eigenvalues appeared!!")
@@ -35,7 +40,7 @@ function MStep_mfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities, S
 
        # Mquantities.V_eig = real.(Mquantities.V_eig_temp)
         Mquantities.eig_order = sortperm(Mquantities.V_eig_temp, rev = true)
-        @views Mquantities.Lambda[:,i] = Mquantities.V_eig_temp[Mquantities.eig_order][1:Squantities.qmax]
+        @views Mquantities.Lambda[:,i] = Mquantities.V_eig_temp[Mquantities.eig_order][1:Squantities.ledermann]
         @views Mquantities.eigenvecs[i] = real.(eigvecs(Array(Mquantities.Vtilde[:,:,i]))[:,Mquantities.eig_order])
         if any(Mquantities.Lambda[:,i] .< 0)
             println("negative eigenvalues appeared!!")
@@ -45,7 +50,7 @@ function MStep_mfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities, S
     #CM-Step 2.5: Optionally updating q
     if Squantities.update_q #Fix this so that we don't accidentally change the value of q when we shouldnt.
         Mquantities.qup.Lambda_cs = cumsum(log.(Mquantities.Lambda) - Mquantities.Lambda + ones(size(Mquantities.Lambda)), dims = 1)
-        Mquantities.qup.n_param = Int.((model.g - 1) .+ 2*model.g*Squantities.p .+ model.g * (Squantities.p .* (1:Squantities.qmax) .- (1:Squantities.qmax) .* ((1:Squantities.qmax) .- 1)/2))
+        Mquantities.qup.n_param = Int.((model.g - 1) .+ 2*model.g*Squantities.p .+ model.g * (Squantities.p .* (1:Squantities.ledermann) .- (1:Squantities.ledermann) .* ((1:Squantities.ledermann) .- 1)/2))
         Mquantities.qup.q_scores = sum(Mquantities.qup.Lambda_cs .* Mquantities.n_i, dims = 2) .+ log(Squantities.n)*Mquantities.qup.n_param
         Mquantities.qup.q_up = argmin(vec(Mquantities.qup.q_scores))
         Mquantities.qup.q_change = (Mquantities.qup.q_up != model.q)
@@ -127,13 +132,18 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
      
     #CM-Step 1: Updating pi and mu_i
     model.pivec = Mquantities.n_i ./ Squantities.n 
+    #Squantities.logL_calc!(model, Mquantities, Squantities)
+    #println("After updating pivec logL is")
+    #println(model.logL)
     #mu_new = Array{Float64,2}(undef,p,g)
     #Mquantities.tau_xi_ij = zeros(n, model.g)
     @inbounds for i in 1:model.g
         Mquantities.tau_xi_ij[:,i] = model.tau[:,i] .* model.w_esteps[:,1,i]
         @views model.mu[:,i] = sum(Squantities.Y .* Mquantities.tau_xi_ij[:,i], dims = 1) ./ sum(Mquantities.tau_xi_ij[:,i]) 
     end 
-
+    #Squantities.logL_calc!(model, Mquantities, Squantities)
+    #println("After updating mu logL is")
+    #println(model.logL)
     #CM-Step 2: Updating q 
     #Vtilde = @MArray zeros(Float64,p,p,model.g)
     #Lambda = @MMatrix zeros(Float64,q_max,model.g)
@@ -145,7 +155,14 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
         @views Mquantities.Vi = (Array(Mquantities.Ymu') * (Mquantities.Ymu .* Mquantities.tau_xi_ij[:,i]))/Mquantities.n_i[i]
         @views Mquantities.D_is = Diagonal(1 ./ sqrt.(model.D[:,:,i]))
         Mquantities.Vtilde[:,:,i] = Mquantities.D_is*Mquantities.Vi*Mquantities.D_is
-        @views Mquantities.V_eig_temp = eigvals(Array(Mquantities.Vtilde[:,:,i]))
+        @views Mquantities.V_eig_temp = try
+            eigvals(Array(Mquantities.Vtilde[:,:,i]))
+        catch e
+            model.status = "failed-MInfNan"
+            return 
+        end
+        
+
         #if any(imag.(V_eig_temp) .!= 0)   
         #    print("uh oh")
         #    print(imag.(V_eig_temp))
@@ -153,6 +170,15 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
         #end 
         #V_eig = real.(V_eig_temp)
          #end 
+
+
+
+
+        if any(imag(Mquantities.V_eig_temp) .> 0)
+            println("Complex eigenvalues appeared!!")
+            model.status = "failed"
+            return
+        end 
 
         if all( Mquantities.V_eig_temp .< 1 )
             ecm_failed = true 
@@ -163,15 +189,8 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
             #println("...")
         end
 
-
-        if any(imag(Mquantities.V_eig_temp) .> 0)
-            println("Complex eigenvalues appeared!!")
-            model.status = "failed"
-            return
-        end 
-
         Mquantities.eig_order = sortperm(Mquantities.V_eig_temp, rev = true)
-        @views Mquantities.Lambda[:,i] = Mquantities.V_eig_temp[Mquantities.eig_order][1:Squantities.qmax]
+        @views Mquantities.Lambda[:,i] = Mquantities.V_eig_temp[Mquantities.eig_order][1:Squantities.ledermann]
         @views Mquantities.eigenvecs[i] = real.(eigvecs(Array(Mquantities.Vtilde[:,:,i]))[:,Mquantities.eig_order])
         if any(real.(Mquantities.Lambda[:,i]) .< 0)
             Mquantities.Lambda[(real.(Mquantities.Lambda[:,i]) .< 0),i] .= 1e-20
@@ -180,7 +199,7 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
     end
 
 
-    if (!ecm_failed | model.name != "MGHFA" )
+    if (!ecm_failed) | (model.name != "MGHFA" )
 
         #CM-Step 3: Updating B_i, then D_i in same loop.
         Mquantities.qi_break = false 
@@ -199,7 +218,8 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
             end 
             @views Mquantities.Uqi = Mquantities.eigenvecs[i][:,1:Mquantities.qi]
             @views Mquantities.Ri = I(model.q)[1:Mquantities.qi,:]
-            @views model.B[:,:,i] = sqrt.(model.D[:,:,i]) * Mquantities.Uqi * Diagonal(sqrt.(Complex.(Mquantities.Lambda[1:Mquantities.qi,i] - ones(1,Mquantities.qi)))) * Mquantities.Ri
+            diagM = 
+            @views model.B[:,:,i] = sqrt.(model.D[:,:,i]) * Mquantities.Uqi * Diagonal(sqrt.(Complex.(Mquantities.Lambda[1:Mquantities.qi,i]' .- ones(1,Mquantities.qi)))[1,:]) * Mquantities.Ri #The diagonal breaks this... 
 
             #Update D
             Mquantities.C = Array(1.0*I(Squantities.p)); Mquantities.Us = Mquantities.Uqi*(Diagonal(1 ./ Mquantities.Lambda[1:Mquantities.qi,i])-I(Mquantities.qi)); Mquantities.V = Array(Mquantities.Uqi')
@@ -218,13 +238,25 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
                     @views Mquantities.C[1:r, (r+1):Squantities.p] = Mquantities.C[1:r, (r+1):Squantities.p] .- Mquantities.ratio .* Mquantities.c*Array(Mquantities.bvec[(r+1):Squantities.p]')        
                 end 
             end
+
             @views model.D[:,:,i] = Diagonal(Mquantities.psitilde[:,1]) 
             
+            
+
             if any(isnan.(model.D[:,:,i]))
                 println("Not good...")
             end
 
         end 
+#        old_ll = model.logL
+#        Squantities.logL_calc!(model, Mquantities, Squantities)
+#        if old_ll > model.logL
+#            for i in 1:model.g
+#                model.B[:,:,i] = rand(Normal(),Squantities.p,model.q) #copy(Mquantities.best_model.B)
+#            end
+        #end
+        #println("After updating B and D logL is")
+        #println(model.logL)
     else 
         logL_mmvmnfa(model, Mquantities, Squantities)
         eu3 = zeros(Squantities.p,Squantities.p,model.g)
@@ -246,11 +278,19 @@ function MStep_msmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities
         end
 
     end
-    #CM Step 4: Updating Psi 
-    @inbounds for i in 1:model.g
-            @views model.Ψ[:,i] = Squantities.msteps(model.tau[:,i], model.w_esteps[:,:,i], Mquantities)
-    end
 
+    try 
+        #CM Step 4: Updating Psi 
+        @inbounds for i in 1:model.g
+            @views model.Ψ[:,i] = Squantities.msteps(model.tau[:,i], model.w_esteps[:,:,i], Mquantities)
+        end
+    catch 
+        model.status = "failedΨ"
+        return
+    end
+    #Squantities.logL_calc!(model, Mquantities, Squantities)
+    #println("After updating psi logL is")
+    #println(model.logL)
 end
 
 function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantities, Squantities::MMVMNFAStaticQuantities)
@@ -288,7 +328,7 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
     #Lambda = @MMatrix zeros(Float64,q_max,model.g)
     #Lambda_new = Array{Float64,2}(undef,q_max,model.g)
     #eigenvecs =  Array{Any,1}(undef,model.g)
-    ecm_failed = false
+    Mquantities.ecm_failed = false
         @inbounds for i in 1:model.g
             Mquantities.beta_matrix = reshape(repeat(model.beta[:,i],inner=1,outer=Squantities.n), Squantities.p, Squantities.n) |> permutedims
             @views Mquantities.Ymu = Squantities.Y .- model.mu[:,i]' 
@@ -298,19 +338,17 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
                         Array(Mquantities.beta_matrix') * (Mquantities.beta_matrix .* Mquantities.tx_ij[:,i]))/Mquantities.n_i[i]
             @views Mquantities.D_is = Diagonal(1 ./ sqrt.(model.D[:,:,i]))
             Mquantities.Vtilde[:,:,i] = Mquantities.D_is*Mquantities.Vi*Mquantities.D_is
-            @views Mquantities.V_eig_temp = eigvals(Array(Mquantities.Vtilde[:,:,i]))
+            #@views Mquantities.V_eig_temp = eigvals(Array(Mquantities.Vtilde[:,:,i]))
             #if any(imag.(V_eig_temp) .!= 0)   
             #    print("uh oh")
             #    print(imag.(V_eig_temp))
             #    print("converting to real number >:(")
             #end 
-            if all( Mquantities.V_eig_temp .< 1 )
-                ecm_failed = true 
-                #println("Complex updating step used")
-                #println(Mquantities.V_eig_temp)
-
-            #else
-                #println("...")
+            @views Mquantities.V_eig_temp = try
+                eigvals(Array(Mquantities.Vtilde[:,:,i]))
+            catch e
+                model.status = "failed-MInfNan"
+                return 
             end
 
             if any(imag(Mquantities.V_eig_temp) .> 0)
@@ -318,11 +356,21 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
                 model.status = "failed"
                 return
             end 
+
+            if all( Mquantities.V_eig_temp .< 1 )
+                Mquantities.ecm_failed = true 
+                #println("Complex updating step used")
+                #println(Mquantities.V_eig_temp)
+
+            #else
+                #println("...")
+            end
+
             #V_eig = real.(V_eig_temp)
 
             Mquantities.eig_order = sortperm(Mquantities.V_eig_temp, rev = true)
             
-            @views Mquantities.Lambda[:,i] = Mquantities.V_eig_temp[Mquantities.eig_order][1:Squantities.qmax]
+            @views Mquantities.Lambda[:,i] = Mquantities.V_eig_temp[Mquantities.eig_order][1:Squantities.ledermann]
             @views Mquantities.eigenvecs[i] = eigvecs(Array(Mquantities.Vtilde[:,:,i]))[:,Mquantities.eig_order]
             if any(Mquantities.Lambda[:,i] .< 0)
                 println("Negative eigenvalues appeared!")
@@ -330,7 +378,7 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
             end
         end
 
-        if true #(!ecm_failed | model.name != "MGHFA")
+        if (!Mquantities.ecm_failed) | (model.name != "MGHFA") #true
         #println("ECM update used")
         #CM-Step 3: Updating B_i, then D_i in same loop.
         Mquantities.qi_break = false 
@@ -349,7 +397,7 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
             end 
             @views Mquantities.Uqi = Mquantities.eigenvecs[i][:,1:Mquantities.qi]
             @views Mquantities.Ri = I(model.q)[1:Mquantities.qi,:]
-            @views model.B[:,:,i] = sqrt.(model.D[:,:,i]) * Mquantities.Uqi * Diagonal(sqrt.(Complex.(Mquantities.Lambda[1:Mquantities.qi,i:i]' - ones(1,Mquantities.qi)))) * Mquantities.Ri
+            @views model.B[:,:,i] = sqrt.(model.D[:,:,i]) * Mquantities.Uqi * Diagonal(sqrt.(Complex.(Mquantities.Lambda[1:Mquantities.qi,i:i]' - ones(1,Mquantities.qi)))[1,:]) * Mquantities.Ri
 
             #Update D
             Mquantities.C = Array(1.0*I(Squantities.p)); Mquantities.Us = Mquantities.Uqi*(Diagonal(1 ./ Mquantities.Lambda[1:Mquantities.qi,i])-I(Mquantities.qi)); Mquantities.V = Array(Mquantities.Uqi')
@@ -373,9 +421,9 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
             @views model.D[:,:,i] = Diagonal(Mquantities.psitilde[:,1]) 
         end 
     else
-        println("AECM update used")
+        #println("AECM update used")
         logL_mmvmnfa(model, Mquantities, Squantities)
-        println(model.logL)
+        #println(model.logL)
         eu3 = zeros(model.q,model.q,Squantities.n)
         @inbounds for i in 1:model.g
             Ymu = Squantities.Y .- model.mu[:,i]' 
@@ -415,10 +463,13 @@ function MStep_mmvmnfa(model::MMVMNFAModel, Mquantities::MMVMNFAMutableQuantitie
         end
 
     end
-
-    #CM Step 4: Updating Psi 
-    @inbounds for i in 1:model.g
-        @views model.Ψ[:,i] = Squantities.msteps(model.tau[:,i], model.w_esteps[:,:,i], Mquantities)
+    try 
+        #CM Step 4: Updating Psi 
+        @inbounds for i in 1:model.g
+            @views model.Ψ[:,i] = Squantities.msteps(model.tau[:,i], model.w_esteps[:,:,i], Mquantities)
+        end
+    catch 
+        model.status = "failedΨ"
+        return
     end
-
 end

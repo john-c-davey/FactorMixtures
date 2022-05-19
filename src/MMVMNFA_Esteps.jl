@@ -2,7 +2,7 @@
  function mtfa_esteps(model, Mquantities, Squantities, index)
   #p = size(data)[2]
   Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
-  Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Mquantities.sigma)), Array(Squantities.Y'), model.mu[:,index])
+  Mquantities.delta = Distances.colwise(SqMahalanobis(Symmetric(inv(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
   #delta = mahalanobis(data, mu_i, real(B_i%*%t(B_i) + D_i), inverted = FALSE)
   #xi_ij = 
   #zeta_ij = 
@@ -17,7 +17,7 @@ function mslfa_esteps(model, Mquantities, Squantities, index)
     #n,p = size(data)
     #sig_i = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
     Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index]
-    Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Mquantities.sigma)), Array(Squantities.Y'), model.mu[:,index])
+    Mquantities.delta = Distances.colwise(SqMahalanobis(Symmetric(inv(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
     Mquantities.mq.c = cdf.(Gamma.(model.Ψ[index]+Squantities.p/2, 1 ./(0.5*Mquantities.delta) ), 1)
     #xi_ij = 2*(model.Ψ[index]+Squantities.p/2).* cdf.(Gamma.(model.Ψ[index]+Squantities.p/2 + 1, 1 ./(0.5*Mquantities.delta) ), 1) ./ (Mquantities.delta.* c) #Need to fix this 
     #int_res = zeros(n,1)                                             
@@ -36,7 +36,7 @@ end
 function mcnfa_esteps(model, Mquantities, Squantities, index)
     #n,p = size(data)
     #sig_i = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
-    Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Mquantities.sigma)), Array(Squantities.Y'), model.mu[:,index])
+    Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Symmetric(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
     Mquantities.mq.d1 = pdf(MvNormal(Vector(model.mu[:,index]), Matrix(Mquantities.sigma) ), Squantities.Y' )
     Mquantities.mq.d2 = pdf(MvNormal(Vector(model.mu[:,index]), Matrix(Mquantities.sigma)/model.Ψ[2,index] ), Squantities.Y' )
     Mquantities.mq.kappa_ij = 1 .- ((1-model.Ψ[1,index])*Mquantities.mq.d1) ./ ((1-model.Ψ[1,index])*Mquantities.mq.d1 + model.Ψ[1,index]*Mquantities.mq.d2)
@@ -52,7 +52,7 @@ function mghfa_esteps(model, Mquantities, Squantities, index)
   #c() wrappers needed here
     #n,p = size(data) 
     Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
-    Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Mquantities.sigma)), Array(Squantities.Y'), model.mu[:,index])
+    Mquantities.delta = Distances.colwise(SqMahalanobis(Symmetric(inv(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
     Mquantities.mq.delta_b = model.beta[:,index]'*inv(Mquantities.sigma)*model.beta[:,index]
     Mquantities.mq.omega = model.Ψ[1,index]
     Mquantities.mq.lambda = model.Ψ[2,index]
@@ -84,7 +84,7 @@ function mbsfa_esteps(model, Mquantities, Squantities, index)
   
     #n,p = size(data) # <- nrow(data); p <- ncol(data)
     Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
-    Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Mquantities.sigma)), Array(Squantities.Y'), model.mu[:,index])
+    Mquantities.delta = Distances.colwise(SqMahalanobis(Symmetric(inv(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
     Mquantities.mq.delta_b = model.beta[:,index]'*inv(Mquantities.sigma)*model.beta[:,index]
     Mquantities.mq.a = model.Ψ[index]
     Mquantities.mq.Theta = Mquantities.delta .+ Mquantities.mq.a^-2
@@ -108,7 +108,7 @@ function mlfa_esteps(model, Mquantities, Squantities, index)
   #sig_i = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
   #delta = Distances.colwise(SqMahalanobis(inv(sig_i)), Array(data'), model.mu[:,index])
   Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]')+model.D[:,:,index]
-  Mquantities.delta = Distances.colwise(SqMahalanobis(inv(Mquantities.sigma)), Array(Squantities.Y'), model.mu[:,index])
+  Mquantities.delta = Distances.colwise(SqMahalanobis(Symmetric(inv(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
   #Mquantities.mq.delta_b = model.beta[:,index]'*inv(Mquantities.sigma)*model.beta[:,index]
   Mquantities.mq.a = model.Ψ[index]
   Mquantities.mq.delta_b = model.beta[:,index]'*inv(Mquantities.sigma)*model.beta[:,index] + 2*Mquantities.mq.a

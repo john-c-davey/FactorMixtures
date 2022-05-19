@@ -1,7 +1,12 @@
 #Density of MtFA
 function logfY_MtFA(model, Mquantities, Squantities, index)
-    Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index]
-    Mquantities.Fji[:,index] = logpdf(MvTDist(model.Ψ[1,index],Vector(model.mu[:,index]), Matrix(Mquantities.sigma)),Squantities.Y')
+    Mquantities.sigma = Symmetric(real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index])
+    delta = Distances.colwise(SqMahalanobis(Symmetric(inv(Mquantities.sigma))), Array(Squantities.Y'), model.mu[:,index])
+    Mquantities.Fji[:,index] = try logpdf(MvTDist(model.Ψ[1,index],Vector(model.mu[:,index]), Matrix(Mquantities.sigma)),Squantities.Y')
+    catch e 
+        log(gamma((Squantities.p + model.Ψ[1,index])/2)) .- log(gamma((model.Ψ[1,index])/2)) .- 0.5*Squantities.p*log(pi * model.Ψ[1,index]) .- 0.5*log(det(Mquantities.sigma)) .- 0.5*(Squantities.p + model.Ψ[1,index])*log.(1 .+ delta/ model.Ψ[1,index])
+    end 
+    
     #return logpdf(MvTDist(model.Ψ[1,index],Vector(model.mu[:,index]), Matrix(Mquantities.sigma)),Squantities.Y') 
   #return(mvtnorm::dmvt(data, delta = mu, sigma = Re(B%*%t(B)+D), df = w_params))
 end
@@ -10,10 +15,10 @@ end
 function logfY_MSLFA(model, Mquantities, Squantities, index)
     #n = size(data)[1]
     #Mquantities.mq.int_container = zeros(Squantities.n,1)
-    Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index]
+    Mquantities.sigma = Symmetric(real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index])
     for j in 1:Squantities.n
         Mquantities.mq.integrand = function integrand(w)
-            w^(model.Ψ[index] - 1) * pdf(MvNormal(Vector(model.mu[:,index]), Matrix(Mquantities.sigma)/w ), Squantities.Y[j,:] )
+            w^(model.Ψ[index] - 1) * pdf(MvNormal(Vector(model.mu[:,index]), Symmetric(Matrix(Mquantities.sigma)/w) ), Squantities.Y[j,:] )
         end 
         Mquantities.mq.int_res = log(model.Ψ[index]*quadgk( Mquantities.mq.integrand,0,1,rtol=1e-10)[1])
         if Mquantities.mq.int_res == -Inf 
@@ -26,9 +31,9 @@ end
 
 #Density of MCNFA
 function logfY_MCNFA(model, Mquantities, Squantities, index)
-    Mquantities.sigma = real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index]
+    Mquantities.sigma = Symmetric(real(model.B[:,:,index]*model.B[:,:,index]') + model.D[:,:,index])
     Mquantities.Fji[:,index] =  log.(
-      model.Ψ[1,index] .* pdf(MvNormal(Vector(model.mu[:,index]), Matrix(Mquantities.sigma)/model.Ψ[2,index] ), Squantities.Y')  .+
+      model.Ψ[1,index] .* pdf(MvNormal(Vector(model.mu[:,index]), Symmetric(Matrix(Mquantities.sigma)/model.Ψ[2,index] )), Squantities.Y')  .+
       (1-model.Ψ[1,index]).*pdf(MvNormal(Vector(model.mu[:,index]), Matrix(Mquantities.sigma) ), Squantities.Y' ) 
       )
 end
@@ -36,8 +41,8 @@ end
 function logd_GH(data,chi,psi,lambda,B, mu, D, beta)
 #  #Density of Generalised Hyperbolic distribution.
     n,p = size(data)
-    sig_i = real(B*B')+D
-    delta = Distances.colwise(SqMahalanobis(inv(sig_i)), Array(data'), mu)
+    sig_i = Symmetric(real(B*B')+D)
+    delta = Distances.colwise(SqMahalanobis(Symmetric(inv(sig_i))), Array(data'), mu)
     #delta = mahalanobis(data, mu, inv(sig_i), inverted = FALSE)
     delta_b = beta'*inv(sig_i)*beta
     if chi != 0

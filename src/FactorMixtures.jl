@@ -3,7 +3,7 @@ module FactorMixtures
 # Write your package code here.
 using LinearAlgebra, Distributions, Random, DataFrames, Distances, Clustering, ProgressMeter, StaticArrays, QuadGK, FiniteDifferences, SpecialFunctions, Optim, Roots
 
-export MFA_ECM, start_clust!, init_est_para_mfa!, mtfa_esteps, mtfa_msteps
+export MFA_ECM, start_clust!, init_est_para_mfa!, mtfa_esteps, mtfa_msteps, MMVMNFAModel
 
 include("MMVMNFA_model_structs.jl")
 include("MMVMNFA_drivers.jl")
